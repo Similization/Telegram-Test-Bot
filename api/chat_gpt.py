@@ -16,10 +16,13 @@ with open("config.yml", "r") as stream:
 
 
 async def get_chat_gpt_answer(text: str, max_tokens: int = 256, temperature: int = 0):
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=text,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    return response["choices"][0]["text"]
+    try:
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=text,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response["choices"][0]["text"]
+    except openai.error.APIError as err:
+        return f"Some errors has occurred: {err.error}"
