@@ -13,6 +13,8 @@ telegram:
 yandex:
   weather:
     key: <your yandex weather token>
+  music:
+    key: <your yandex music token>
 open_weather:
   key: <you openweather token>
 openai:
