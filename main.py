@@ -12,7 +12,7 @@ from prettytable import PrettyTable
 from api.chat_gpt import get_chat_gpt_answer, ChatGPTState
 from api.weather import get_weather
 from api.yandex.balaboba.balaboba_ import generate_trash
-from api.yandex.music.async_client import YAMState
+from api.yandex.music.client import YAMState
 from reprezzent_bot import ReprezzentBot
 
 DATA: dict
@@ -119,6 +119,8 @@ Commands:
 `get_yam_playlists` - Show your YaM playlist
 `help` - List of available commands
 `start` - Start experience
+`start_yam` - Start Yandex Music
+`stop_yam` - Stop Yandex Music
 `start_chat_gpt_dialog` - Start ChatGPT
 `stop_chat_gpt_dialog` - Stop ChatGPT
 `weather` (city) (country code) - Show weather in the place where you are
@@ -200,7 +202,7 @@ async def balaboba_command(message: types.Message):
     lambda message: message.from_id == MY_TELEGRAM_ID,
     commands=["start_chat_gpt_dialog"],
 )
-async def start_chat_gpt_dialog(message: types.Message):
+async def chat_gpt_start_dialog(message: types.Message):
     """
     Command to activate chatGPT.
     ChatGPT token should be set.
@@ -214,7 +216,7 @@ async def start_chat_gpt_dialog(message: types.Message):
     state=ChatGPTState.dialog_state,
     commands=["stop_chat_gpt_dialog"],
 )
-async def stop_chat_gpt_dialog(message: types.Message, state: FSMContext):
+async def chat_gpt_stop_dialog(message: types.Message, state: FSMContext):
     """
     Command to deactivate chatGPT.
     ChatGPT token should be set.
@@ -243,9 +245,84 @@ async def chat_gpt_dialog(message: types.Message, state: FSMContext):
 
 # TODO: fix markup, think about modernization, add [back, <info>, download] buttons logic
 @dp.message_handler(
-    lambda message: message.from_id == MY_TELEGRAM_ID, commands=["get_yam_playlists"]
+    lambda message: message.from_id == MY_TELEGRAM_ID,
+    lambda message: message.text == "back",
+    state=YAMState,
 )
-async def get_yam_playlists_list(message: types.Message):
+async def yam_back(message: types.Message, state: FSMContext):
+    bot.yam_client.remove_from_queue()
+    music = bot.yam_client.get_now()
+    if hasattr(music, "title"):
+        message.text = music.title
+    yam_state = await state.get_state()
+
+    if yam_state == YAMState.track.state:
+        # set previous state
+        bot.yam_client.set_state(state=YAMState.track)
+
+        await YAMState.playlist_list.set()
+        await yam_get_playlist(message=message)
+    elif yam_state == YAMState.playlist.state:
+        await YAMState.start.set()
+        await yam_get_playlists_list(message=message)
+
+
+@dp.message_handler(
+    lambda message: message.from_id == MY_TELEGRAM_ID,
+    lambda message: message.text == "download",
+    state=YAMState,
+)
+async def yam_download(message: types.Message, state: FSMContext):
+    if await state.get_state() == YAMState.playlist_list.state:
+        await message.reply("At this moment you can not download list of playlists!")
+        return
+    music = bot.yam_client.get_now()
+    bot.yam_client.download(music=music)
+    await message.reply("Downloaded!")
+
+
+@dp.message_handler(
+    lambda message: message.from_id == MY_TELEGRAM_ID, commands=["start_yam"]
+)
+async def yam_start(message: types.Message):
+    """
+    Command to start Yandex Music.
+    Yandex Music token should be set.
+    """
+    await YAMState.start.set()
+    await message.reply(
+        text="Yandex Music was `activated`",
+        reply_markup=create_markup(data=[["playlists"]]),
+        parse_mode="Markdown",
+    )
+
+
+@dp.message_handler(
+    lambda message: message.from_id == MY_TELEGRAM_ID,
+    state=YAMState,
+    commands=["stop_yam"],
+)
+async def yam_stop(message: types.Message, state: FSMContext):
+    """
+    Command to stop Yandex Music.
+    Yandex Music token should be set.
+    """
+    current_state = await state.get_state()
+    if current_state is None:
+        return
+    logging.info("Cancelling state %r", current_state)
+    await state.finish()
+    await message.reply(
+        text="Yandex Music was `deactivated`",
+        parse_mode="Markdown",
+        reply_markup=types.ReplyKeyboardRemove(),
+    )
+
+
+@dp.message_handler(
+    lambda message: message.from_id == MY_TELEGRAM_ID, state=YAMState.start
+)
+async def yam_get_playlists_list(message: types.Message):
     """
     Command get playlists from Yandex Music.
     Yandex Music token should be set.
@@ -256,9 +333,17 @@ async def get_yam_playlists_list(message: types.Message):
         )
 
     await YAMState.playlist_list.set()
-    user_playlists = bot.yam_client.get_playlist_list()
+    # get user list of playlists
+    client_playlist_list = bot.yam_client.get_client_playlist_list()
+    # add this list to queue
+    bot.yam_client.put_to_queue(music=client_playlist_list)
+    # set previous state
+    bot.yam_client.set_state(state=YAMState.start)
+    # if queue element is list -> get part of it
+    user_playlist_list = bot.yam_client.get_part(music_list=bot.yam_client.get_now())
+
     result: List[Tuple] = []
-    for playlist in user_playlists:
+    for playlist in user_playlist_list:
         result.append((playlist.title, playlist.track_count))
     table = create_table(
         column_names=["Playlist title", "Track count"], table_data=result
@@ -269,7 +354,7 @@ async def get_yam_playlists_list(message: types.Message):
         f"```\n{table}```\nPlease enter playlist title, which you want to open",
         markup=create_markup(
             data=[
-                [playlist.title for playlist in user_playlists],
+                [playlist.title for playlist in user_playlist_list],
                 ["previous", "next"],
             ],
             resize_keyboard=True,
@@ -281,10 +366,11 @@ async def get_yam_playlists_list(message: types.Message):
 
 @dp.message_handler(
     lambda message: message.from_id == MY_TELEGRAM_ID,
-    lambda message: bot.yam_client.get_playlist_by_title(title=message.text) is None,
+    lambda message: bot.yam_client.get_from_now_part_by_title(title=message.text)
+    is None,
     state=YAMState.playlist_list,
 )
-async def get_yam_playlist(message: types.Message):
+async def yam_get_playlist_invalid(message: types.Message):
     return await message.reply(
         text="Bad playlist title. Choose playlist from the keyboard."
     )
@@ -293,16 +379,26 @@ async def get_yam_playlist(message: types.Message):
 @dp.message_handler(
     lambda message: message.from_id == MY_TELEGRAM_ID, state=YAMState.playlist_list
 )
-async def get_yam_playlist(message: types.Message):
-    await YAMState.playlist_current.set()
+async def yam_get_playlist(message: types.Message):
+    await YAMState.playlist.set()
 
-    optional_playlist = bot.yam_client.get_playlist_by_title(title=message.text)
+    if bot.yam_client.get_state() == YAMState.track:
+        optional_playlist = bot.yam_client.get_now()
+    else:
+        optional_playlist = bot.yam_client.get_from_now_part_by_title(
+            title=message.text
+        )
+
     if optional_playlist is None:
         return await message.reply(
             text="Bad playlist name. Choose playlist from the keyboard."
         )
+    # add this list to queue
+    bot.yam_client.put_to_queue(music=optional_playlist)
+    # set previous state
+    bot.yam_client.set_state(state=YAMState.playlist_list)
 
-    track_list = bot.yam_client.get_tracks_from_playlist()
+    track_list = bot.yam_client.get_tracks_from_playlist(playlist=optional_playlist)
     result: List[Tuple] = []
     for track in track_list:
         result.append(
@@ -326,24 +422,29 @@ async def get_yam_playlist(message: types.Message):
 
 @dp.message_handler(
     lambda message: message.from_id == MY_TELEGRAM_ID,
-    lambda message: bot.yam_client.get_track_by_title(title=message.text) is None,
-    state=YAMState.playlist_current,
+    lambda message: bot.yam_client.get_from_now_part_by_title(title=message.text)
+    is None,
+    state=YAMState.playlist,
 )
-async def get_yam_track(message: types.Message):
+async def yam_get_track_invalid(message: types.Message):
     return await message.reply(text="Bad track title. Choose track from the keyboard.")
 
 
 @dp.message_handler(
-    lambda message: message.from_id == MY_TELEGRAM_ID, state=YAMState.playlist_current
+    lambda message: message.from_id == MY_TELEGRAM_ID, state=YAMState.playlist
 )
-async def get_yam_track(message: types.Message):
-    await YAMState.track_current.set()
+async def yam_get_track(message: types.Message):
+    await YAMState.track.set()
 
-    optional_track = bot.yam_client.get_track_by_title(title=message.text)
+    optional_track = bot.yam_client.get_from_now_part_by_title(title=message.text)
     if optional_track is None:
         return await message.reply(
             text="Bad track title. Choose track from the keyboard."
         )
+    # add this list to queue
+    bot.yam_client.put_to_queue(music=optional_track)
+    # set previous state
+    bot.yam_client.set_state(state=YAMState.playlist)
 
     await create_answer_yam_message(
         message=message,
@@ -369,7 +470,10 @@ async def cancel_handler(message: types.Message, state: FSMContext):
         return
     logging.info("Cancelling state %r", current_state)
     await state.finish()
-    await message.reply("Cancelled.", reply_markup=types.ReplyKeyboardRemove())
+    await message.reply(
+        "Everything was `deactivated` and stopped",
+        reply_markup=types.ReplyKeyboardRemove(),
+    )
 
 
 @dp.message_handler()
