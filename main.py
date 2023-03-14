@@ -60,10 +60,10 @@ def create_markup(data: List[List[str]], *args, **kwargs) -> types.ReplyKeyboard
 
 
 def create_table(
-        column_names: List[str],
-        table_data: List[Tuple],
-        align: Literal["l", "c", "r"] = "r",
-        align_set: Optional[List[str]] = None,
+    column_names: List[str],
+    table_data: List[Tuple],
+    align: Literal["l", "c", "r"] = "r",
+    align_set: Optional[List[str]] = None,
 ) -> PrettyTable:
     table = PrettyTable(column_names)
     if align_set is None:
@@ -83,11 +83,11 @@ def create_table(
 
 
 async def yam_message(
-        message: types.Message,
-        text: str,
-        image_link: Optional[str] = None,
-        markup: Optional[types.ReplyKeyboardMarkup] = None,
-        parse_mode: Literal["Markdown", "MarkdownV2", "HTML"] = "Markdown",
+    message: types.Message,
+    text: str,
+    image_link: Optional[str] = None,
+    markup: Optional[types.ReplyKeyboardMarkup] = None,
+    parse_mode: Literal["Markdown", "MarkdownV2", "HTML"] = "Markdown",
 ):
     if image_link is not None:
         await message.answer_photo(
@@ -97,11 +97,7 @@ async def yam_message(
         await message.reply(text=text, reply_markup=markup, parse_mode=parse_mode)
 
 
-async def yam_message_create_by_state(
-        message: types.Message,
-        music,
-        state: FSMContext
-):
+async def yam_message_create_by_state(message: types.Message, music, state: FSMContext):
     current_state = await state.get_state()
     if current_state == YAMState.playlist_list.state:
         result: List[Tuple] = []
@@ -113,7 +109,7 @@ async def yam_message_create_by_state(
         await yam_message(
             message=message,
             text="Here is a list of your yandex music playlists:"
-                 f"```\n{table}```\nPlease enter playlist title, which you want to open",
+            f"```\n{table}```\nPlease enter playlist title, which you want to open",
             markup=create_markup(
                 data=[
                     [playlist.title for playlist in music],
@@ -137,10 +133,14 @@ async def yam_message_create_by_state(
         await yam_message(
             message=message,
             text=f"Here is a list of `{music.title}` tracks:"
-                 f"```\n{table}```\nPlease enter track title, which you want to open",
+            f"```\n{table}```\nPlease enter track title, which you want to open",
             image_link=music.cover.uri,
             markup=create_markup(
-                data=[[track.title for track in track_list], ["back", "info", "download"], ["previous", "next"]],
+                data=[
+                    [track.title for track in track_list],
+                    ["back", "info", "download"],
+                    ["previous", "next"],
+                ],
                 resize_keyboard=True,
                 selective=True,
             ),
@@ -150,12 +150,14 @@ async def yam_message_create_by_state(
         await yam_message(
             message=message,
             text=f"Title: {music.title}\n"
-                 f"Authors: {bot.yam_client.get_artists_name_from_track(track=music)}\n"
-                 f"Duration: {music.duration_ms} ms\n"
-                 f"Track [link](https://music.yandex.ru/track/{music.id})",
+            f"Authors: {bot.yam_client.get_artists_name_from_track(track=music)}\n"
+            f"Duration: {music.duration_ms} ms\n"
+            f"Track [link](https://music.yandex.ru/track/{music.id})",
             image_link=music.cover_uri.replace("%%", "200x200"),
             markup=create_markup(
-                data=[["back", "info", "download"]], resize_keyboard=True, selective=True
+                data=[["back", "info", "download"]],
+                resize_keyboard=True,
+                selective=True,
             ),
             parse_mode="Markdown",
         )
@@ -222,13 +224,13 @@ async def weather_command(message: types.Message):
     # TODO: optimize text
     await message.reply(
         text=f"```\n"
-             f"Weather:\n"
-             f'\t\t\t\tTemperature: {weather_data["main"]["temp"]}ºC\n'
-             f'\t\t\t\tFeels like: {weather_data["main"]["feels_like"]}ºC\n'
-             f'\t\t\t\tDiapason: from {weather_data["main"]["temp_min"]}ºC to {weather_data["main"]["temp_max"]}ºC\n'
-             f"Wind:\n"
-             f'\t\t\t\tSpeed: {weather_data["wind"]["speed"]} meter/sec\n'
-             f'\t\t\t\tGust: {weather_data["wind"].get("gust", "<no data>")} meter/sec\n```',
+        f"Weather:\n"
+        f'\t\t\t\tTemperature: {weather_data["main"]["temp"]}ºC\n'
+        f'\t\t\t\tFeels like: {weather_data["main"]["feels_like"]}ºC\n'
+        f'\t\t\t\tDiapason: from {weather_data["main"]["temp_min"]}ºC to {weather_data["main"]["temp_max"]}ºC\n'
+        f"Wind:\n"
+        f'\t\t\t\tSpeed: {weather_data["wind"]["speed"]} meter/sec\n'
+        f'\t\t\t\tGust: {weather_data["wind"].get("gust", "<no data>")} meter/sec\n```',
         parse_mode="Markdown",
     )
 
@@ -255,7 +257,7 @@ async def balaboba_command(message: types.Message):
         await warning_message(
             message=message,
             warning="There is one required argument for this command: _text_\n"
-                    "Use /help command for more information.",
+            "Use /help command for more information.",
         )
         return
     balaboba_generated_result = await generate_trash(query=arguments)
@@ -357,7 +359,9 @@ async def yam_previous(message: types.Message, state: FSMContext):
     yam_state = await state.get_state()
     if yam_state == YAMState.track.state:
         return
-    await yam_message_create_by_state(message=message, music=bot.yam_client.get_now(), state=state)
+    await yam_message_create_by_state(
+        message=message, music=bot.yam_client.get_now(), state=state
+    )
 
 
 @dp.message_handler(
@@ -371,7 +375,9 @@ async def yam_next(message: types.Message, state: FSMContext):
     yam_state = await state.get_state()
     if yam_state == YAMState.track.state:
         return
-    await yam_message_create_by_state(message=message, music=bot.yam_client.get_now(), state=state)
+    await yam_message_create_by_state(
+        message=message, music=bot.yam_client.get_now(), state=state
+    )
 
 
 @dp.message_handler(
@@ -435,15 +441,17 @@ async def yam_get_playlists_list(message: types.Message, state: FSMContext):
     # if queue element is list -> get part of it
     user_playlist_list = bot.yam_client.get_now_part()
 
-    await yam_message_create_by_state(message=message, music=user_playlist_list, state=state)
+    await yam_message_create_by_state(
+        message=message, music=user_playlist_list, state=state
+    )
 
 
 @dp.message_handler(
     lambda message: message.from_id == MY_TELEGRAM_ID,
     lambda message: bot.yam_client.get_music_by_title(
-        music_list=bot.yam_client.get_now_part(),
-        title=message.text
-    ) is None,
+        music_list=bot.yam_client.get_now_part(), title=message.text
+    )
+    is None,
     state=YAMState.playlist_list,
 )
 async def yam_get_playlist_invalid(message: types.Message):
@@ -462,8 +470,7 @@ async def yam_get_playlist(message: types.Message, state: FSMContext):
         optional_playlist = bot.yam_client.get_now()
     else:
         optional_playlist = bot.yam_client.get_music_by_title(
-            music_list=bot.yam_client.get_now_part(),
-            title=message.text
+            music_list=bot.yam_client.get_now_part(), title=message.text
         )
 
     if optional_playlist is None:
@@ -475,15 +482,17 @@ async def yam_get_playlist(message: types.Message, state: FSMContext):
     # set previous state
     bot.yam_client.set_state(state=YAMState.playlist_list)
 
-    await yam_message_create_by_state(message=message, music=optional_playlist, state=state)
+    await yam_message_create_by_state(
+        message=message, music=optional_playlist, state=state
+    )
 
 
 @dp.message_handler(
     lambda message: message.from_id == MY_TELEGRAM_ID,
     lambda message: bot.yam_client.get_music_by_title(
-        music_list=bot.yam_client.get_now_part(),
-        title=message.text
-    ) is None,
+        music_list=bot.yam_client.get_now_part(), title=message.text
+    )
+    is None,
     state=YAMState.playlist,
 )
 async def yam_get_track_invalid(message: types.Message):
@@ -497,8 +506,7 @@ async def yam_get_track(message: types.Message, state: FSMContext):
     await YAMState.track.set()
 
     optional_track = bot.yam_client.get_music_by_title(
-        music_list=bot.yam_client.get_now_part(),
-        title=message.text
+        music_list=bot.yam_client.get_now_part(), title=message.text
     )
     if optional_track is None:
         return await message.reply(
@@ -508,7 +516,9 @@ async def yam_get_track(message: types.Message, state: FSMContext):
     bot.yam_client.put_to_queue(music=optional_track)
     # set previous state
     bot.yam_client.set_state(state=YAMState.playlist)
-    await yam_message_create_by_state(message=message, music=optional_track, state=state)
+    await yam_message_create_by_state(
+        message=message, music=optional_track, state=state
+    )
 
 
 @dp.message_handler(
