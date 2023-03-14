@@ -56,35 +56,51 @@ class YandexMusicClient:
     def get_artists_name_from_track(track: Track) -> str:
         return ", ".join([artist.name for artist in track.artists])
 
-    def get_from_now_part_by_title(self, title: str) -> Optional[Playlist | Track]:
-        # list[playlist] | playlist
-        music_list = self.__now
-        if type(self.__now) is Playlist:
-            music_list = self.get_tracks_from_playlist(playlist=self.__now)
-        return self.get_music_by_title(
-            music_list=self.get_part(music_list=music_list),
-            title=title
-        )
-
     def __queue_is_empty(self):
         return len(self.__queue) == 0
 
-    def next_page(self):
+    def get_music_list(self) -> List[Playlist] | List[Track]:
+        if type(self.__now) is Playlist:
+            return self.get_tracks_from_playlist(playlist=self.__now)
+        else:
+            return self.__now
+
+    def next_page(self) -> bool:
         """
         Set current page to the next page, if it less than page count.
         """
-        if self.__queue_is_empty():
-            return
-        page_count = (len(self.__queue[-1]) + self.__count - 1) // self.__count
-        if page_count > self.__page:
-            self.__page += 1
+        if not self.__queue_is_empty():
+            music_list = self.get_music_list()
+            page_count = (len(music_list) + self.__count - 1) // self.__count
+            if page_count > self.__page:
+                self.__page += 1
+                return True
+        return False
 
-    def previous_page(self):
+    def previous_page(self) -> bool:
         """
         Set current page to the previous page, if it bigger than 1.
         """
         if self.__page > 1:
             self.__page -= 1
+            return True
+        return False
+
+    def set_to_default_page(self):
+        self.__page = 1
+
+    def get_part(self, music_list: List[Playlist | Track]) -> List:
+        """
+        Get part of current object.
+        Starts from self.__page and takes self.__count elements
+        """
+        return music_list[(self.__page - 1) * self.__count: self.__page * self.__count]
+
+    def get_now_part(self):
+        return self.get_part(music_list=self.get_music_list())
+
+    def get_now(self) -> Optional[List[Playlist] | Playlist | List[Track]]:
+        return self.__now
 
     def put_to_queue(self, music: List[Playlist] | Playlist | List[Track]):
         if not self.__queue_is_empty() and self.__queue[-1] == music:
@@ -102,9 +118,6 @@ class YandexMusicClient:
         else:
             self.__now = self.__queue[-1]
         return removed_element
-
-    def get_now(self) -> Optional[List[Playlist] | Playlist | List[Track]]:
-        return self.__now
 
     def __download_track(
             self,
@@ -146,13 +159,6 @@ class YandexMusicClient:
 
     def get_state(self) -> Optional[YAMState]:
         return self.__state
-
-    def get_part(self, music_list: List[Playlist | Track]) -> List:
-        """
-        Get part of current object.
-        Starts from self.__page and takes self.__count elements
-        """
-        return music_list[self.__page - 1: self.__page * self.__count]
 
     def get_client_playlist_list(self) -> List[Playlist]:
         return self.__client.users_playlists_list()
