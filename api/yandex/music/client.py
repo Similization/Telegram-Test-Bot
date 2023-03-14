@@ -1,5 +1,6 @@
 import os
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from yandex_music import Client, Playlist, Track, TrackShort
@@ -24,14 +25,14 @@ class YandexMusicClient:
 
     @staticmethod
     def __is_track_exist(path_to_track: str) -> bool:
-        try:
-            open(file=path_to_track, mode="a+")
-            return True
-        except OSError:
-            return False
+        p = Path(path_to_track)
+        return p.exists()
 
     @staticmethod
     def __create_directory(path_to_file: str):
+        p = Path(path_to_file)
+        if p.exists():
+            return
         os.makedirs(name=path_to_file, exist_ok=True)
 
     @staticmethod
@@ -123,36 +124,39 @@ class YandexMusicClient:
             self,
             track: Track, path_to_music_directory: str = "music/",
             path_to_track: str = "tracks/"
-    ):
+    ) -> str:
         """
         Download 1 track to chosen path.
         """
         track_title = f"{track.title} - {self.get_artists_name_from_track(track=track)}.mp3"
         full_track_path = path_to_music_directory + path_to_track + track_title
-        if self.__is_track_exist(path_to_track=full_track_path):
-            return
-        self.__create_directory(path_to_file=path_to_music_directory + path_to_track)
-        track.download(f'{full_track_path}')
+        if not self.__is_track_exist(path_to_track=full_track_path):
+            self.__create_directory(path_to_file=path_to_music_directory + path_to_track)
+            track.download(filename=f'{full_track_path}', codec='mp3', bitrate_in_kbps=192)
+        return full_track_path
 
     def __download_playlist(self, playlist: Playlist):
         """
         Download all tracks from playlist to chosen path.
         """
         playlist_tracks = self.get_full_tracks(playlist.fetch_tracks())
+        list_of_paths = []
         for track in playlist_tracks:
-            self.__download_track(track=track, path_to_track=f"{playlist.title}/")
+            full_track_path = self.__download_track(track=track, path_to_track=f"{playlist.title}/")
+            list_of_paths.append(full_track_path)
+        return tuple(list_of_paths)
 
-    def download(self, music: List | Playlist | Track):
+    def download(self, music: Playlist | Track) -> Tuple[str] | str:
         """
         Download music.
         """
-        if type(music) is list:
-            for music_one in music:
-                self.download(music=music_one)
+        # if type(music) is list:
+        #     for music_one in music:
+        #         self.download(music=music_one)
         if type(music) is Playlist:
-            self.__download_playlist(playlist=music)
+            return self.__download_playlist(playlist=music)
         else:
-            self.__download_track(track=music)
+            return self.__download_track(track=music)
 
     def set_state(self, state: YAMState):
         self.__state = state

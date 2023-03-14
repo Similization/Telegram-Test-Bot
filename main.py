@@ -344,8 +344,14 @@ async def yam_download(message: types.Message, state: FSMContext):
         await message.reply("At this moment you can not download list of playlists!")
         return
     music = bot.yam_client.get_now()
-    bot.yam_client.download(music=music)
+    downloaded_files = bot.yam_client.download(music=music)
+    if type(downloaded_files) is str:
+        await message.answer_audio(audio=open(file=downloaded_files, mode="rb"))
+    else:
+        for file in downloaded_files:
+            await message.answer_audio(audio=open(file=file, mode="rb"))
     await message.reply("Downloaded!")
+    # TODO: clear music folder
 
 
 @dp.message_handler(
